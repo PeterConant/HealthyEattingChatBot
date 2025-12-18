@@ -5,24 +5,52 @@ import requests
 import numpy as np
 import json
 
+### FEW SHOT
+# f"""The user is going to ask questions about healthy foods and home cooking recuipes. The following are formats I'd like you to loosely follow when responding to a few type of questions. 
+
+#     For questions about individual food's, thier nutritional value, and theiroverall nutrition facts:
+#     "X food has Y (units) of Z (nutrition)"
+
+#     For Questions similar to "what foods are high/low in nutrient:
+#     "X, Y, Z, foods are high in N nutrient with A, B, C units of nutrient respectily."
+
+#     For questions asking about recipes answer with:
+#     "Here are the instructions and ingredients for X recipe. (provide instructions and ingredients)"
+
+#     Use the following context to answer inform you answer.
+    
+#     Context:
+#     {retrieved_context}
+
+#     Question: {user_query}"""
+
+### CHAIN OF THOUGHT 
+# """Use the following context to answer the question.
+
+#     Context:
+#     {retrieved_context}
+
+#     Question: {user_query}
+
+#     Lets think step by step. Answer:"""
+
 def ollama_generate(user_query, retrieved_context):
     url_generate = "http://localhost:11434/api/generate"
-    prompt = f"""Use the following context to answer the question.
+    prompt = f"""You are a chatbot that answers users questions about healthy eatting and hoem cooking. You provide nutrient information with per unit measurements, recipes with ingredients and instructions, and advice on how to eat well.
 
+    Use the following context to answer inform you answer.
     Context:
     {retrieved_context}
 
-    Question: {user_query}
-
-    Answer:"""
+    Question: {user_query}"""
     payload = {
-        "model": "phi3",
+        "model": "llama3.2:1b",
         "prompt": prompt,
         "stream": False
     }
-    print("\n\n---Sending Message to Model------------------\n\n")
     response = requests.post(url_generate, json=payload)
     print("Response: " + response.json()["response"])
+    return response.json()["response"], retrieved_context
 
 def ollama_chat(user_query, retrieved_context):
     url_chat = "http://localhost:11434/api/chat"
@@ -58,6 +86,7 @@ nutritiondb.set_model(model)
 RECIPE_INTENT_EXAMPLES = [
     "give me a recipe for chicken parmesan",
     "how do you make chocolate chip cookies",
+    "how do you make burgers"
     "what's a good way to cook salmon",
     "I want to bake a cake",
     "show me instructions for pad thai",
@@ -120,14 +149,14 @@ def detect_intent(query, threshold=0.50):
 def retrieve_context(query):
     #intent
     intent_bool, score, intent_type = detect_intent(query)
-    if intent_bool:
-        match intent_type:
-            case 'foodlist_best':
-                context = nutritiondb.get_foodnutrition_in_userquery(query)
-            case 'topnbottom_best':
-                context = nutritiondb.highlow_nutrients(query)
-            case 'recipe_best':
-                context = webscraping.recipe_request(query)
+    #if intent_bool:
+    match intent_type:
+        case 'foodlist_best':
+            context = nutritiondb.get_foodnutrition_in_userquery(query)
+        case 'topnbottom_best':
+            context = nutritiondb.highlow_nutrients(query)
+        case 'recipe_best':
+            context = webscraping.recipe_request(query)
     return context
     
                 
@@ -137,10 +166,18 @@ def prompt_user():
     query = input(user_prompt)
     return query
 
-def main(query="I need to eat more vitamin C, what should I eat."):
+def batch(query):
     #query = prompt_user() 
     context = retrieve_context(query)
-    response, retrieved_context = ollama_chat(query, context)
+    response, retrieved_context = ollama_generate(query, context)
+    return response, retrieved_context
+
+def main(query="Is avocado healthy?"):
+    #query = prompt_user() 
+    context = retrieve_context(query)
+    response, retrieved_context = ollama_generate(query, context)
+    print(f"Response: {response}\n")
+    print(f"Context: {retrieved_context}\n")
     return response, retrieved_context
 
 if __name__ == "__main__":
